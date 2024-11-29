@@ -1,9 +1,11 @@
 #pragma once
 
+#include <utility>
 #include <variant>
 #include <vector>
 #include <utility>
 #include "schema.h"
+#include <iostream>
 
 namespace storage {
     using RID = uint64_t;
@@ -11,7 +13,7 @@ namespace storage {
 
     class Tuple {
     public:
-        Tuple(const Schema& schema, const std::vector<Field>& fields) : schema_(schema), fields_(fields) {
+        Tuple(const Schema& schema, std::vector<Field>  fields) : schema_(schema), fields_(std::move(fields)) {
             if (fields_.size() != schema_.GetColumnCount()) {
                 throw std::invalid_argument("Number of fields doesn't match schema");
             }
@@ -23,8 +25,8 @@ namespace storage {
             }
             return fields_.at(index);
         }
-    private:
+    public:
         const Schema& schema_;
-        const std::vector<Field>& fields_;
+        std::vector<Field> fields_;
     };
 }
