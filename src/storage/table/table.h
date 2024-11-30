@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 #include <unordered_map>
+#include <fstream>
+#include <algorithm>
 
 namespace storage {
     class Table {
@@ -26,6 +28,9 @@ namespace storage {
         std::shared_ptr<BPlusIndex<KeyType>> GetIndex(const std::string& name) const;
 
         [[nodiscard]] size_t GetRowCount() const;
+
+        void SaveToFile(const std::string& file_name) const;
+        void LoadFromFile(const std::string& file_name);
     private:
         const Schema schema_;
         std::vector<std::shared_ptr<Tuple>> tuples_;

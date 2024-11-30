@@ -1,4 +1,5 @@
 #include "table.h"
+#include "schema.h"
 #include <stdexcept>
 #include <iostream>
 
@@ -92,7 +93,6 @@ namespace storage {
                 if (index) index->Remove(*str_ptr, rid);
             }
         }
-
         tuples_[rid].reset();
         return true;
     }
@@ -156,11 +156,92 @@ namespace storage {
     }
 
     size_t Table::GetRowCount() const {
-        size_t count = 0;
-        for (const auto& tuple : tuples_) {
-            ++count;
+        return tuples_.size();
+    }
+
+    void Table::SaveToFile(const std::string &file_name) const {
+        std::ofstream out(file_name);
+        if (!out) throw std::ios_base::failure("Failed to open file for writing");
+
+        out << "SCHEMA\n";
+        for (size_t i = 0; i < schema_.GetColumnCount(); ++i) {
+            const auto& column = schema_.GetColumn(i);
+            out << column.name << "," << static_cast<int>(column.type) << "\n";
         }
-        return count;
+
+        out << "DATA\n";
+        for (const auto & tuple : tuples_) {
+            if (tuple) {
+                for (size_t i = 0; i < schema_.GetColumnCount(); ++i) {
+                    const Field& field = tuple->GetField(i);
+                    if (std::holds_alternative<int>(field)) out << std::get<int>(field);
+                    else if (std::holds_alternative<double>(field)) out << std::get<double>(field);
+                    else if (std::holds_alternative<std::string>(field)) {
+                        std::string value = std::get<std::string>(field);
+                        if (value.find(',') != std::string::npos) value = "\"" + value + "\"";
+                        out << value;
+                    }
+                    if (i < schema_.GetColumnCount() - 1) out << ",";
+                }
+                out << "\n";
+            }
+        }
+
+        out << "INDEXES\n";
+        for (const auto& [name, index_ptr] : indexes_) {
+            out << name << "\n";
+        }
+        out.close();
+    }
+
+    void Table::LoadFromFile(const std::string &file_name) {
+        std::ifstream in(file_name);
+        if (!in) throw std::ios_base::failure("Failed to open file for reading");
+
+        std::string line;
+        bool reading_data = false;
+        bool reading_indexes = false;
+
+        tuples_.clear();
+        indexes_.clear();
+        next_rid_ = 0;
+
+        while (std::getline(in, line)) {
+            if (line == "SCHEMA") continue;
+            else if (line == "DATA") {
+                reading_data = true;
+                reading_indexes = false;
+                continue;
+            } else if (line == "INDEXES") {
+                reading_data = false;
+                reading_indexes = true;
+                continue;
+            }
+
+            if (reading_data) {
+                std::vector<Field> fields;
+                size_t column_index = 0;
+                size_t pos = 0;
+
+                while ((pos = line.find(',')) != std::string::npos) {
+                    std::string value = line.substr(0, pos);
+                    if (schema_.GetColumn(column_index).type == DataType::INTEGER) fields.emplace_back(std::stoi(value));
+                    else if (schema_.GetColumn(column_index).type == DataType::DOUBLE) fields.emplace_back(std::stod(value));
+                    else fields.emplace_back(value);
+                    line.erase(0, pos + 1);
+                    ++column_index;
+                }
+                if (schema_.GetColumn(column_index).type == DataType::INTEGER) fields.emplace_back(std::stoi(line));
+                else if (schema_.GetColumn(column_index).type == DataType::DOUBLE) fields.emplace_back(std::stod(line));
+                else fields.emplace_back(line);
+
+                InsertTuple(fields);
+
+            } else if (reading_indexes) {
+                std::cout << "Index: " << line << "\n";
+            }
+        }
+        in.close();
     }
 
     template void Table::CreateIndex<int>(const std::string &name, size_t column_index, int degree);
