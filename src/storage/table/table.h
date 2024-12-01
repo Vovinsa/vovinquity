@@ -42,6 +42,8 @@ namespace storage {
 
         [[nodiscard]] size_t GetRowCount() const;
 
+        const Schema& GetSchema() const;
+
         void SaveToFile(const std::string& file_name) const;
         void LoadFromFile(const std::string& file_name);
 

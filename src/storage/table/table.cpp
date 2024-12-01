@@ -43,6 +43,10 @@ namespace storage {
         return std::get<std::shared_ptr<BPlusIndex<KeyType>>>(it->second.index);
     }
 
+    const Schema &Table::GetSchema() const {
+        return schema_;
+    }
+
     RID Table::InsertTuple(const std::vector<Field> &fields) {
         RID rid = next_rid_++;
         tuples_[rid] = std::make_shared<Tuple>(schema_, fields);
