@@ -6,199 +6,193 @@
 namespace storage {
     template<typename KeyType>
     void Table::CreateIndex(const std::string &name, size_t column_index, int degree) {
-        if (column_index >= schema_.GetColumnCount()) {
-            throw std::out_of_range("Columns index out of range");
+        if (indexes_.find(name) != indexes_.end()) throw std::invalid_argument("Index with the given name already exists");
+        if (column_index >= schema_.GetColumnCount()) throw std::out_of_range("Column index out of range");
+
+        DataType data_type = schema_.GetColumn(column_index).type;
+        if ((data_type == DataType::INTEGER && !std::is_same<KeyType, int>::value) ||
+            (data_type == DataType::DOUBLE && !std::is_same<KeyType, double>::value) ||
+            (data_type == DataType::VARCHAR && !std::is_same<KeyType, std::string>::value)) {
+            throw std::invalid_argument("KeyType does not match column data type");
         }
-        if (indexes_.find(name) != indexes_.end()) {
-            throw std::invalid_argument("Index with the given name already exists");
-        }
+
         auto index = std::make_shared<BPlusIndex<KeyType>>(degree);
-        for (RID rid = 0; rid < tuples_.size(); ++rid) {
-            if (tuples_[rid]) {
-                const Field& field = tuples_[rid]->GetField(column_index);
-                if (std::holds_alternative<KeyType>(field)) {
-                    KeyType key = std::get<KeyType>(field);
-                    index->Insert(key, rid);
-                }
-            }
+
+        for (const auto& [rid, tuple] : tuples_) {
+            const Field& field = tuple->GetField(column_index);
+            KeyType key = std::get<KeyType>(field);
+            index->Insert(key, rid);
         }
-        indexes_[name] = index;
+        IndexVariant index_variant{std::in_place_type<std::shared_ptr<BPlusIndex<KeyType>>>, index};
+        IndexInfo index_info{column_index, data_type, index_variant};
+        indexes_[name] = index_info;
     }
 
     template<typename KeyType>
     std::shared_ptr<BPlusIndex<KeyType>> Table::GetIndex(const std::string &name) const {
         auto it = indexes_.find(name);
         if (it == indexes_.end()) throw std::invalid_argument("Index not found");
-        return std::dynamic_pointer_cast<BPlusIndex<KeyType>>(it->second);
+
+        DataType data_type = it->second.data_type;
+        if ((data_type == DataType::INTEGER && !std::is_same<KeyType, int>::value) ||
+            (data_type == DataType::DOUBLE && !std::is_same<KeyType, double>::value) ||
+            (data_type == DataType::VARCHAR && !std::is_same<KeyType, std::string>::value)) {
+            throw std::invalid_argument("KeyType does not match index data type");
+        }
+
+        return std::get<std::shared_ptr<BPlusIndex<KeyType>>>(it->second.index);
     }
 
     RID Table::InsertTuple(const std::vector<Field> &fields) {
         RID rid = next_rid_++;
-        if (rid >= tuples_.size()) {
-            tuples_.resize(rid + 1);
-        }
         tuples_[rid] = std::make_shared<Tuple>(schema_, fields);
-        for (const auto& [name, index_ptr] : indexes_) {
-            size_t column_index = 0;
-            for (; column_index < schema_.GetColumnCount(); ++column_index) {
-                if (schema_.GetColumn(column_index).name == name) break;
-            }
-            if (column_index >= schema_.GetColumnCount()) continue;
-            const Field& field = tuples_[rid]->GetField(column_index);
-            if (auto int_ptr = std::get_if<int>(&field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<int>>(index_ptr);
-                if (index) {
-                    index->Insert(*int_ptr, rid);
-                }
-            }
-            if (auto double_ptr = std::get_if<double>(&field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<double>>(index_ptr);
-                if (index) index->Insert(*double_ptr, rid);
-            }
-            if (auto str_ptr = std::get_if<std::string>(&field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<std::string>>(index_ptr);
-                if (index) index->Insert(*str_ptr, rid);
+
+        for (const auto& [name, index_info] : indexes_) {
+            size_t column_index = index_info.column_index;
+            const Field& field = fields[column_index];
+            DataType data_type = index_info.data_type;
+
+            if (data_type == DataType::INTEGER) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<int>>>(index_info.index);
+                int key = std::get<int>(field);
+                index->Insert(key, rid);
+            } else if (data_type == DataType::DOUBLE) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<double>>>(index_info.index);
+                double key = std::get<double>(field);
+                index->Insert(key, rid);
+            } else if (data_type == DataType::VARCHAR) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<std::string>>>(index_info.index);
+                std::string key = std::get<std::string>(field);
+                index->Insert(key, rid);
             }
         }
         return rid;
     }
 
     std::shared_ptr<Tuple> Table::GetTuple(RID rid) const {
-        if (rid >= tuples_.size()) throw std::out_of_range("Invalid RID");
-        return tuples_[rid];
+        auto it = tuples_.find(rid);
+        if (it == tuples_.end()) throw std::out_of_range("Invalid RID");
+        return it->second;
     }
 
     bool Table::RemoveTuple(RID rid) {
-        if (rid >= tuples_.size() || !tuples_[rid]) {
-            return false;
-        }
-        for (const auto& [name, index_ptr] : indexes_) {
-            size_t column_index = 0;
-            for (; column_index < schema_.GetColumnCount(); ++column_index) {
-                if (schema_.GetColumn(column_index).name == name) break;
-            }
-            if (column_index >= schema_.GetColumnCount()) continue;
+        auto it = tuples_.find(rid);
+        if (it == tuples_.end()) return false;
 
-            const Field& field = tuples_[rid]->GetField(column_index);
-            if (auto int_ptr = std::get_if<int>(&field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<int>>(index_ptr);
-                if (index) index->Remove(*int_ptr, rid);
-            }
-            if (auto double_ptr = std::get_if<double>(&field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<double>>(index_ptr);
-                if (index) index->Remove(*double_ptr, rid);
-            }
-            if (auto str_ptr = std::get_if<std::string>(&field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<std::string>>(index_ptr);
-                if (index) index->Remove(*str_ptr, rid);
+        for (const auto& [name, index_info] : indexes_) {
+            size_t column_index = index_info.column_index;
+            const Field& field = it->second->GetField(column_index);
+            DataType data_type = index_info.data_type;
+
+            if (data_type == DataType::INTEGER) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<int>>>(index_info.index);
+                int key = std::get<int>(field);
+                index->Remove(key, rid);
+            } else if (data_type == DataType::DOUBLE) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<double>>>(index_info.index);
+                double key = std::get<double>(field);
+                index->Remove(key, rid);
+            } else if (data_type == DataType::VARCHAR) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<std::string>>>(index_info.index);
+                std::string key = std::get<std::string>(field);
+                index->Remove(key, rid);
             }
         }
-        tuples_[rid].reset();
+        tuples_.erase(it);
         return true;
     }
 
     bool Table::UpdateTuple(RID rid, const std::vector<Field> &fields) {
-        if (rid >= tuples_.size() || !tuples_[rid]) return false;
-        for (const auto& [name, index_ptr] : indexes_) {
-            size_t column_index = 0;
-            for (; column_index < schema_.GetColumnCount(); ++column_index) {
-                if (schema_.GetColumn(column_index).name == name) {
-                    break;
-                }
-            }
-            if (column_index >= schema_.GetColumnCount()) continue;
+        auto it = tuples_.find(rid);
+        if (it == tuples_.end()) return false;
 
-            const Field& old_field = tuples_[rid]->GetField(column_index);
+        for (const auto& [name, index_info] : indexes_) {
+            size_t column_index = index_info.column_index;
+            const Field& old_field = it->second->GetField(column_index);
             const Field& new_field = fields[column_index];
+            DataType data_type = index_info.data_type;
 
-            // int
-            if (auto int_old_ptr = std::get_if<int>(&old_field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<int>>(index_ptr);
-                if (index) index->Remove(*int_old_ptr, rid);
-            }
-            if (auto int_new_ptr = std::get_if<int>(&new_field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<int>>(index_ptr);
-                if (index) index->Insert(*int_new_ptr, rid);
-            }
-
-            // double
-            if (auto double_old_ptr = std::get_if<double>(&old_field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<double>>(index_ptr);
-                if (index) index->Remove(*double_old_ptr, rid);
-            }
-            if (auto double_new_ptr = std::get_if<double>(&new_field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<double>>(index_ptr);
-                if (index) index->Insert(*double_new_ptr, rid);
-            }
-
-            // str
-            if (auto str_old_ptr = std::get_if<std::string>(&old_field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<std::string>>(index_ptr);
-                if (index) index->Remove(*str_old_ptr, rid);
-            }
-            if (auto str_new_ptr = std::get_if<std::string>(&new_field)) {
-                auto index = std::dynamic_pointer_cast<BPlusIndex<std::string>>(index_ptr);
-                if (index) index->Insert(*str_new_ptr, rid);
+            if (data_type == DataType::INTEGER) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<int>>>(index_info.index);
+                int old_key = std::get<int>(old_field);
+                int new_key = std::get<int>(new_field);
+                index->Remove(old_key, rid);
+                index->Insert(new_key, rid);
+            } else if (data_type == DataType::DOUBLE) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<double>>>(index_info.index);
+                double old_key = std::get<double>(old_field);
+                double new_key = std::get<double>(new_field);
+                index->Remove(old_key, rid);
+                index->Insert(new_key, rid);
+            } else if (data_type == DataType::VARCHAR) {
+                auto index = std::get<std::shared_ptr<BPlusIndex<std::string>>>(index_info.index);
+                std::string old_key = std::get<std::string>(old_field);
+                std::string new_key = std::get<std::string>(new_field);
+                index->Remove(old_key, rid);
+                index->Insert(new_key, rid);
             }
         }
-        tuples_[rid] = std::make_shared<Tuple>(schema_, fields);
+        it->second = std::make_shared<Tuple>(schema_, fields);
         return true;
     }
 
     std::vector<RID> Table::GetAllRID() const {
-        std::vector<RID> row_ids;
-        for (RID row_id = 0; row_id < tuples_.size(); ++row_id) {
-            if (tuples_[row_id]) {
-                row_ids.push_back(row_id);
-            }
-        }
-        return row_ids;
+        std::vector<RID> rids;
+        for (const auto& [rid, tuple] : tuples_) rids.push_back(rid);
+        return rids;
     }
 
     size_t Table::GetRowCount() const {
         return tuples_.size();
     }
 
-    void Table::SaveToFile(const std::string &file_name) const {
+    void Table::SaveToFile(const std::string& file_name) const {
         std::ofstream out(file_name);
         if (!out) throw std::ios_base::failure("Failed to open file for writing");
 
         out << "SCHEMA\n";
-        for (size_t i = 0; i < schema_.GetColumnCount(); ++i) {
-            const auto& column = schema_.GetColumn(i);
-            out << column.name << "," << static_cast<int>(column.type) << "\n";
-        }
+        for (const auto& column : schema_.GetColumns()) out << column.name << "," << static_cast<int>(column.type) << "\n";
 
         out << "DATA\n";
-        for (const auto & tuple : tuples_) {
-            if (tuple) {
-                for (size_t i = 0; i < schema_.GetColumnCount(); ++i) {
-                    const Field& field = tuple->GetField(i);
-                    if (std::holds_alternative<int>(field)) out << std::get<int>(field);
-                    else if (std::holds_alternative<double>(field)) out << std::get<double>(field);
-                    else if (std::holds_alternative<std::string>(field)) {
-                        std::string value = std::get<std::string>(field);
-                        if (value.find(',') != std::string::npos) value = "\"" + value + "\"";
-                        out << value;
+        for (const auto& [rid, tuple] : tuples_) {
+            out << rid << ",";
+            for (size_t i = 0; i < schema_.GetColumnCount(); ++i) {
+                const Field& field = tuple->GetField(i);
+                if (std::holds_alternative<int>(field)) out << std::get<int>(field);
+                else if (std::holds_alternative<double>(field)) out << std::get<double>(field);
+                else if (std::holds_alternative<std::string>(field)) {
+                    std::string value = std::get<std::string>(field);
+                    if (value.find('"') != std::string::npos) {
+                        size_t pos = 0;
+                        while ((pos = value.find('"', pos)) != std::string::npos) {
+                            value.insert(pos, 1, '"');
+                            pos += 2;
+                        }
                     }
-                    if (i < schema_.GetColumnCount() - 1) out << ",";
+                    if (value.find(',') != std::string::npos || value.find('"') != std::string::npos) out << "\"" << value << "\"";
+                    else out << value;
                 }
-                out << "\n";
+                if (i < schema_.GetColumnCount() - 1) out << ",";
             }
+            out << "\n";
         }
 
         out << "INDEXES\n";
-        for (const auto& [name, index_ptr] : indexes_) {
-            out << name << "\n";
+        for (const auto& [name, index_info] : indexes_) {
+            out << name << ",";
+            out << index_info.column_index << ",";
+            out << static_cast<int>(index_info.data_type) << "\n";
         }
+
         out.close();
     }
 
-    void Table::LoadFromFile(const std::string &file_name) {
+    void Table::LoadFromFile(const std::string& file_name) {
         std::ifstream in(file_name);
         if (!in) throw std::ios_base::failure("Failed to open file for reading");
 
         std::string line;
+        bool reading_schema = false;
         bool reading_data = false;
         bool reading_indexes = false;
 
@@ -206,43 +200,96 @@ namespace storage {
         indexes_.clear();
         next_rid_ = 0;
 
+        Schema file_schema;
+
         while (std::getline(in, line)) {
-            if (line == "SCHEMA") continue;
-            else if (line == "DATA") {
+            if (line == "SCHEMA") {
+                reading_schema = true;
+                reading_data = false;
+                reading_indexes = false;
+                continue;
+            } else if (line == "DATA") {
+                reading_schema = false;
                 reading_data = true;
                 reading_indexes = false;
                 continue;
             } else if (line == "INDEXES") {
+                reading_schema = false;
                 reading_data = false;
                 reading_indexes = true;
                 continue;
             }
 
-            if (reading_data) {
+            if (reading_schema) {
+                std::istringstream ss(line);
+                std::string name;
+                std::string type_str;
+                if (std::getline(ss, name, ',') && std::getline(ss, type_str)) {
+                    DataType type = static_cast<DataType>(std::stoi(type_str));
+                    file_schema.InsertColumn(name, type);
+                }
+            } else if (reading_data) {
+                std::istringstream ss(line);
+                std::string rid_str;
+                if (!std::getline(ss, rid_str, ',')) continue;
+                RID rid = std::stoull(rid_str);
+
                 std::vector<Field> fields;
                 size_t column_index = 0;
-                size_t pos = 0;
+                std::string token;
+                while (column_index < file_schema.GetColumnCount()) {
+                    if (!std::getline(ss, token, ',')) throw std::runtime_error("Insufficient data fields in row");
 
-                while ((pos = line.find(',')) != std::string::npos) {
-                    std::string value = line.substr(0, pos);
-                    if (schema_.GetColumn(column_index).type == DataType::INTEGER) fields.emplace_back(std::stoi(value));
-                    else if (schema_.GetColumn(column_index).type == DataType::DOUBLE) fields.emplace_back(std::stod(value));
-                    else fields.emplace_back(value);
-                    line.erase(0, pos + 1);
+                    if (!token.empty() && token.front() == '"') {
+                        while (!token.empty() && token.back() != '"') {
+                            std::string next_token;
+                            if (!std::getline(ss, next_token, ',')) throw std::runtime_error("Unmatched quotes in string field");
+                            token += "," + next_token;
+                        }
+                        token = token.substr(1, token.size() - 2);
+                        size_t pos = 0;
+                        while ((pos = token.find("\"\"", pos)) != std::string::npos) {
+                            token.replace(pos, 2, "\"");
+                            ++pos;
+                        }
+                    }
+
+                    const auto& column = file_schema.GetColumn(column_index);
+                    if (column.type == DataType::INTEGER) fields.emplace_back(std::stoi(token));
+                    else if (column.type == DataType::DOUBLE) fields.emplace_back(std::stod(token));
+                    else if (column.type == DataType::VARCHAR) fields.emplace_back(token);
                     ++column_index;
                 }
-                if (schema_.GetColumn(column_index).type == DataType::INTEGER) fields.emplace_back(std::stoi(line));
-                else if (schema_.GetColumn(column_index).type == DataType::DOUBLE) fields.emplace_back(std::stod(line));
-                else fields.emplace_back(line);
-
-                InsertTuple(fields);
-
+                if (fields.size() != schema_.GetColumnCount()) throw std::runtime_error("Mismatch in number of fields while loading data");
+                if (rid >= next_rid_) next_rid_ = rid + 1;
+                tuples_[rid] = std::make_shared<Tuple>(schema_, fields);
             } else if (reading_indexes) {
-                std::cout << "Index: " << line << "\n";
+                std::istringstream ss(line);
+                std::string name;
+                std::string column_index_str;
+                std::string data_type_str;
+                if (std::getline(ss, name, ',') && std::getline(ss, column_index_str, ',') && std::getline(ss, data_type_str)) {
+                    size_t column_index = std::stoul(column_index_str);
+                    DataType data_type = static_cast<DataType>(std::stoi(data_type_str));
+
+                    if (data_type == DataType::INTEGER) CreateIndex<int>(name, column_index, 3);
+                    else if (data_type == DataType::DOUBLE) CreateIndex<double>(name, column_index, 3);
+                    else if (data_type == DataType::VARCHAR) CreateIndex<std::string>(name, column_index, 3);
+                }
             }
         }
         in.close();
+
+        if (file_schema.GetColumnCount() != schema_.GetColumnCount()) throw std::runtime_error("Schema mismatch: different number of columns");
+        for (size_t i = 0; i < schema_.GetColumnCount(); ++i) {
+            const auto& table_column = schema_.GetColumn(i);
+            const auto& file_column = file_schema.GetColumn(i);
+            if (table_column.name != file_column.name || table_column.type != file_column.type) {
+                throw std::runtime_error("Schema mismatch: column definitions do not match");
+            }
+        }
     }
+
 
     template void Table::CreateIndex<int>(const std::string &name, size_t column_index, int degree);
     template void Table::CreateIndex<double>(const std::string &name, size_t column_index, int degree);

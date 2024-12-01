@@ -7,9 +7,22 @@
 #include <vector>
 #include <unordered_map>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 
 namespace storage {
+    using IndexVariant = std::variant<
+            std::shared_ptr<BPlusIndex<int>>,
+            std::shared_ptr<BPlusIndex<double>>,
+            std::shared_ptr<BPlusIndex<std::string>>
+    >;
+
+    struct IndexInfo {
+        size_t column_index;
+        DataType data_type;
+        IndexVariant index;
+    };
+
     class Table {
     public:
         explicit Table(Schema&  schema) : schema_(schema), next_rid_(0) {};
@@ -33,8 +46,8 @@ namespace storage {
         void LoadFromFile(const std::string& file_name);
     private:
         const Schema schema_;
-        std::vector<std::shared_ptr<Tuple>> tuples_;
+        std::unordered_map<RID, std::shared_ptr<Tuple>> tuples_;
         RID next_rid_;
-        std::unordered_map<std::string, std::shared_ptr<IndexBase>> indexes_;
+        std::unordered_map<std::string, IndexInfo> indexes_;
     };
 }
