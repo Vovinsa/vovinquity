@@ -25,13 +25,13 @@ namespace storage {
 
     class Table {
     public:
-        explicit Table(Schema&  schema) : schema_(schema), next_rid_(0) {};
+        explicit Table(const Schema&  schema) : schema_(schema), next_rid_(0) {};
         ~Table() = default;
 
-        RID InsertTuple(const std::vector<Field>& fields);
+        virtual RID InsertTuple(const std::vector<Field>& fields);
         [[nodiscard]] std::shared_ptr<Tuple> GetTuple(RID rid) const;
-        bool RemoveTuple(RID rid);
-        bool UpdateTuple(RID rid, const std::vector<Field>& fields);
+        virtual bool RemoveTuple(RID rid);
+        virtual bool UpdateTuple(RID rid, const std::vector<Field>& fields);
         [[nodiscard]] std::vector<RID> GetAllRID() const;
 
         template<typename KeyType>
@@ -44,7 +44,8 @@ namespace storage {
 
         void SaveToFile(const std::string& file_name) const;
         void LoadFromFile(const std::string& file_name);
-    private:
+
+    protected:
         const Schema schema_;
         std::unordered_map<RID, std::shared_ptr<Tuple>> tuples_;
         RID next_rid_;
