@@ -7,6 +7,7 @@
 #include <vector>
 #include <functional>
 
+
 namespace storage {
     struct TableRecord {
         int table_id;
@@ -39,6 +40,8 @@ namespace storage {
         ~GenericSystemTable() = default;
 
         RID AddRecord(const RecordType& record);
+        bool RemoveRecord(const RecordType& record);
+        bool RemoveRecords(const std::function<bool(const RecordType&)>& predicate);
         std::vector<RecordType> GetAllRecords() const;
         std::vector<RecordType> FindRecords(const std::function<bool(const RecordType&)>& predicate) const;
 
@@ -52,9 +55,47 @@ namespace storage {
             : SystemTable(schema) {}
 
     template<typename RecordType>
-    RID GenericSystemTable<RecordType>::AddRecord(const RecordType& record) {
+    RID GenericSystemTable<RecordType>::AddRecord(const RecordType &record) {
         std::vector<Field> fields = RecordToFields(record);
         return InternalInsertTuple(fields);
+    }
+
+    template<typename RecordType>
+    bool GenericSystemTable<RecordType>::RemoveRecord(const RecordType &record) {
+        return RemoveRecords([&](const RecordType &r) {
+            if constexpr (std::is_same_v<RecordType, TableRecord>) {
+                return r.table_id == record.table_id;
+            } else if constexpr (std::is_same_v<RecordType, ColumnRecord>) {
+                return r.column_id == record.column_id;
+            } else if constexpr (std::is_same_v<RecordType, IndexRecord>) {
+                return r.index_id == record.index_id;
+            } else if constexpr (std::is_same_v<RecordType, IndexColumnRecord>) {
+                return (r.index_id == record.index_id &&
+                        r.column_id == record.column_id &&
+                        r.ordinal_position == record.ordinal_position);
+            } else {
+                return false;
+            }
+        });
+    }
+
+    template<typename RecordType>
+    bool GenericSystemTable<RecordType>::RemoveRecords(const std::function<bool(const RecordType&)>& predicate) {
+        std::vector<RID> rids_to_delete;
+        for (const auto& [rid, tuple] : tuples_) {
+            RecordType rec = FieldsToRecord(tuple);
+            if (predicate(rec)) {
+                rids_to_delete.push_back(rid);
+            }
+        }
+
+        bool all_removed = true;
+        for (auto rid : rids_to_delete) {
+            if (!InternalRemoveTuple(rid)) {
+                all_removed = false;
+            }
+        }
+        return all_removed;
     }
 
     template<typename RecordType>
