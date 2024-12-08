@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 include_directories(src/storage/index)
 include_directories(src/storage/table)
 include_directories(src/storage/table/system)
+include_directories(src/catalog)
 
 add_executable(
         Database
@@ -13,5 +14,6 @@ add_executable(
         src/storage/index/bplus_index.cpp
         src/storage/table/table.cpp
         src/storage/table/system/system_table.cpp
+        src/catalog/catalog.cpp
         main.cpp
 )
