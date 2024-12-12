@@ -20,6 +20,7 @@ namespace catalog {
 
         template<typename KeyType>
         void CreateIndex(const std::string& index_name, const std::string& table_name, size_t column_index, int degree);
+        std::vector<std::pair<storage::IndexRecord, std::vector<std::string>>> GetIndexesForTable(const std::string& table_name) const;
 
         const storage::GenericSystemTable<storage::TableRecord>& GetTablesSystemTable() const;
         const storage::GenericSystemTable<storage::ColumnRecord>& GetColumnsSystemTable() const;

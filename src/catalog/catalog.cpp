@@ -60,43 +60,36 @@ namespace catalog {
         return tables_.find(table_name) != tables_.end();
     }
 
-    void Catalog::DropTable(const std::string& table_name) {
-        auto it = tables_.find(table_name);
-        if (it == tables_.end()) throw std::invalid_argument("Table not found: " + table_name);
+    void catalog::Catalog::DropTable(const std::string& table_name) {
+        if (!HasTable(table_name)) throw std::runtime_error("Table does not exist: " + table_name);
 
-        auto table_records = tables_system_table_.FindRecords([&](const storage::TableRecord& record) {
-            return record.table_name == table_name;
-        });
-        if (table_records.empty()) throw std::invalid_argument("Table not found in system table: " + table_name);
+        auto table_records = tables_system_table_.FindRecords(
+                [&](const storage::TableRecord& record) {
+                    return record.table_name == table_name;
+                }
+        );
 
-        int table_id = table_records.front().table_id;
+        if (table_records.empty()) throw std::runtime_error("Table not found in system tables: " + table_name);
 
-        columns_system_table_.RemoveRecords([&](const storage::ColumnRecord& record) {
-            return record.table_id == table_id;
-        });
+        int table_id = table_records[0].table_id;
 
-        auto index_records = indexes_system_table_.FindRecords([&](const storage::IndexRecord& record) {
-            return record.table_id == table_id;
-        });
-
-        for (const auto& index_record : index_records) {
-            int index_id = index_record.index_id;
-            index_columns_system_table_.RemoveRecords([&](const storage::IndexColumnRecord& record) {
-                return record.index_id == index_id;
-            });
-        }
-
-        indexes_system_table_.RemoveRecords([&](const storage::IndexRecord& record) {
-            return record.table_id == table_id;
-        });
-
-        tables_system_table_.RemoveRecords([&](const storage::TableRecord& record) {
-            return record.table_id == table_id;
-        });
-
-        tables_.erase(it);
+        indexes_system_table_.RemoveRecords(
+                [&](const storage::IndexRecord& record) {
+                    return record.table_id == table_id;
+                }
+        );
+        index_columns_system_table_.RemoveRecords(
+                [&](const storage::IndexColumnRecord& record) {
+                    return record.index_id == table_id;
+                }
+        );
+        tables_system_table_.RemoveRecords(
+                [&](const storage::TableRecord& record) {
+                    return record.table_id == table_id;
+                }
+        );
+        tables_.erase(table_name);
     }
-
 
 
     template<typename KeyType>
@@ -125,6 +118,45 @@ namespace catalog {
 
         int column_id = column_records.front().column_id;
         index_columns_system_table_.AddRecord({index_id, column_id, 1});
+    }
+
+    std::vector<std::pair<storage::IndexRecord, std::vector<std::string>>> Catalog::GetIndexesForTable(const std::string &table_name) const {
+        if (!HasTable(table_name)) throw std::runtime_error("Table does not exist: " + table_name);
+
+        auto table_records = tables_system_table_.FindRecords(
+                [&](const storage::TableRecord& record) {
+                    return record.table_name == table_name;
+                });
+
+        if (table_records.empty()) throw std::runtime_error("Table not found in system tables: " + table_name);
+
+        int table_id = table_records.front().table_id;
+
+        auto index_records = indexes_system_table_.FindRecords(
+                [&](const storage::IndexRecord& record) {
+                    return record.table_id == table_id;
+                });
+        std::vector<std::pair<storage::IndexRecord, std::vector<std::string>>> index_with_columns;
+        for (const auto& index_record : index_records) {
+            int index_id = index_record.index_id;
+            auto index_columns = index_columns_system_table_.FindRecords(
+                    [&](const storage::IndexColumnRecord& record) {
+                        return record.index_id == index_id;
+                    });
+            std::vector<std::string> column_names;
+            for (const auto& index_column : index_columns) {
+                int column_id = index_column.column_id;
+                auto column_records = columns_system_table_.FindRecords(
+                        [&](const storage::ColumnRecord& record) {
+                            return record.column_id == column_id;
+                        });
+
+                if (!column_records.empty()) column_names.push_back(column_records.front().column_name);
+            }
+            index_with_columns.emplace_back(index_record, column_names);
+        }
+
+        return index_with_columns;
     }
 
     const storage::GenericSystemTable<storage::TableRecord>& Catalog::GetTablesSystemTable() const {
