@@ -30,11 +30,16 @@ namespace planner {
                 if (children.empty()) {
                     throw std::runtime_error("FilterNode has no children");
                 }
+                std::string index_name;
+                bool has_index = HasIndexForColumn(filter_node->GetTableName(),
+                                                   filter_node->GetColumnName(), index_name);
                 auto child_plan = CreatePlan(std::move(children.front()));
                 return std::make_unique<FilterNode>(
                         std::move(child_plan),
                         filter_node->GetPredicate(),
-                        filter_node->GetColumnName()
+                        filter_node->GetColumnName(),
+                        has_index ? index_name : "",
+                        filter_node->GetTableName()
                         );
             }
             case SORT_STATEMENT: {
@@ -61,7 +66,8 @@ namespace planner {
                 return std::make_unique<AggregateNode>(
                         std::move(child_plan),
                         aggregate_node->GetGroupColumns(),
-                        aggregate_node->GetAggregateFunctions()
+                        aggregate_node->GetAggregateFunctions(),
+                        aggregate_node->GetTableName()
                 );
             }
             case CREATE_TABLE_STATEMENT: {

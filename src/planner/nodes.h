@@ -40,7 +40,7 @@ namespace planner {
 
     class InsertNode : public PlanNode {
     public:
-        InsertNode(std::string table_name, std::vector<std::string> columns, std::vector<std::variant<int, double, std::string>> values)
+        InsertNode(std::string table_name, std::vector<std::string> columns, std::vector<storage::Field> values)
                 : table_name_(std::move(table_name)), columns_(std::move(columns)), values_(std::move(values)) {}
         PlanNodeType GetType() const override { return INSERT_STATEMENT; }
         std::vector<std::unique_ptr<PlanNode>>& GetChildren() override { return empty_children_; }
@@ -56,17 +56,23 @@ namespace planner {
 
     class FilterNode : public PlanNode {
     public:
-        FilterNode(std::unique_ptr<PlanNode> child, std::string predicate, std::string column_name)
-                : predicate_(std::move(predicate)), column_name_(std::move(column_name)) {
+        FilterNode(std::unique_ptr<PlanNode> child, std::string predicate, std::string column_name, std::string index_name,
+                   std::string table_name)
+                : predicate_(std::move(predicate)), column_name_(std::move(column_name)), index_name_(std::move(index_name)),
+                table_name_(std::move(table_name)) {
             children_.push_back(std::move(child));
         }
         PlanNodeType GetType() const override { return FILTER_STATEMENT; }
         std::vector<std::unique_ptr<PlanNode>>& GetChildren() override { return children_; }
         const std::string& GetPredicate() const { return predicate_; }
         const std::string& GetColumnName() const { return column_name_; }
+        const std::string& GetTableName() const { return table_name_; }
+        const std::string& GetIndexName() const { return index_name_; }
     private:
+        std::string table_name_;
         std::string predicate_;
         std::string column_name_;
+        std::string index_name_;
         std::vector<std::unique_ptr<PlanNode>> children_;
     };
 
@@ -80,21 +86,26 @@ namespace planner {
         std::vector<std::unique_ptr<PlanNode>>& GetChildren() override { return children_; }
         const std::vector<std::string>& GetSortColumns() const { return sort_columns_; }
     private:
+        std::string table_name_;
         std::vector<std::string> sort_columns_;
         std::vector<std::unique_ptr<PlanNode>> children_;
     };
 
     class AggregateNode : public PlanNode {
     public:
-        AggregateNode(std::unique_ptr<PlanNode> child, std::vector<std::string> group_columns, std::vector<std::string> aggregate_functions)
-                : group_columns_(std::move(group_columns)), aggregate_functions_(std::move(aggregate_functions)) {
+        AggregateNode(std::unique_ptr<PlanNode> child, std::vector<std::string> group_columns, std::vector<std::string> aggregate_functions,
+                      std::string table_name)
+                : group_columns_(std::move(group_columns)), aggregate_functions_(std::move(aggregate_functions)),
+                table_name_(std::move(table_name)) {
             children_.push_back(std::move(child));
         }
         PlanNodeType GetType() const override { return AGGREGATE_STATEMENT; }
         std::vector<std::unique_ptr<PlanNode>>& GetChildren() override { return children_; }
         const std::vector<std::string>& GetGroupColumns() const { return group_columns_; }
         const std::vector<std::string>& GetAggregateFunctions() const { return aggregate_functions_; }
+        const std::string& GetTableName() const { return table_name_; }
     private:
+        std::string table_name_;
         std::vector<std::string> group_columns_;
         std::vector<std::string> aggregate_functions_;
         std::vector<std::unique_ptr<PlanNode>> children_;
