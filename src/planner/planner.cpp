@@ -66,7 +66,7 @@ namespace planner {
                 return std::make_unique<AggregateNode>(
                         std::move(child_plan),
                         aggregate_node->GetGroupColumns(),
-                        aggregate_node->GetAggregateFunctions(),
+                        aggregate_node->GetAggregates(),
                         aggregate_node->GetTableName()
                 );
             }
