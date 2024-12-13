@@ -35,6 +35,15 @@ namespace storage {
             return columns_.at(index);
         }
 
+        [[nodiscard]] size_t GetColumnIndex(const std::string& name) const {
+            for (size_t i = 0; i < columns_.size(); ++i) {
+                if (columns_[i].name == name) {
+                    return i;
+                }
+            }
+            throw std::out_of_range("Column name not found: " + name);
+        }
+
     private:
         std::vector<Column> columns_;
     };
