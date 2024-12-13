@@ -49,6 +49,10 @@ namespace storage {
             }
             return fields_.at(index);
         }
+
+        size_t GetFieldIndex(const std::string& column_name) const {
+            return schema_.GetColumnIndex(column_name);
+        }
     public:
         const Schema& schema_;
         std::vector<Field> fields_;
