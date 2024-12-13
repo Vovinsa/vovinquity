@@ -91,23 +91,37 @@ namespace planner {
         std::vector<std::unique_ptr<PlanNode>> children_;
     };
 
+    enum class AggType {
+        SUM,
+        COUNT,
+        AVG
+    };
+
+    struct AggInstruction {
+        AggType type;
+        std::string column_name;
+    };
+
     class AggregateNode : public PlanNode {
     public:
-        AggregateNode(std::unique_ptr<PlanNode> child, std::vector<std::string> group_columns, std::vector<std::string> aggregate_functions,
+        AggregateNode(std::unique_ptr<PlanNode> child,
+                      std::vector<std::string> group_columns,
+                      std::vector<AggInstruction> aggregates,
                       std::string table_name)
-                : group_columns_(std::move(group_columns)), aggregate_functions_(std::move(aggregate_functions)),
-                table_name_(std::move(table_name)) {
+                : group_columns_(std::move(group_columns)),
+                  aggregates_(std::move(aggregates)),
+                  table_name_(std::move(table_name)) {
             children_.push_back(std::move(child));
         }
         PlanNodeType GetType() const override { return AGGREGATE_STATEMENT; }
         std::vector<std::unique_ptr<PlanNode>>& GetChildren() override { return children_; }
         const std::vector<std::string>& GetGroupColumns() const { return group_columns_; }
-        const std::vector<std::string>& GetAggregateFunctions() const { return aggregate_functions_; }
+        const std::vector<AggInstruction>& GetAggregates() const { return aggregates_; }
         const std::string& GetTableName() const { return table_name_; }
     private:
         std::string table_name_;
         std::vector<std::string> group_columns_;
-        std::vector<std::string> aggregate_functions_;
+        std::vector<AggInstruction> aggregates_;
         std::vector<std::unique_ptr<PlanNode>> children_;
     };
 
