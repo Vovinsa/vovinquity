@@ -57,8 +57,8 @@ namespace storage {
         const Schema& GetSchema() {
             return schema_;
         }
-    public:
-        const Schema& schema_;
+    private:
+        Schema schema_;
         std::vector<Field> fields_;
     };
 }
