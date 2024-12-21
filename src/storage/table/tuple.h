@@ -54,7 +54,7 @@ namespace storage {
             return schema_.GetColumnIndex(column_name);
         }
 
-        const Schema& GetSchema() {
+        const Schema& GetSchema() const {
             return schema_;
         }
     private:
