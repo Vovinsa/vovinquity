@@ -41,10 +41,19 @@ namespace executor {
             column_indexes.reserve(select_node->GetColumns().size());
 
             for (const auto &col_name : select_node->GetColumns()) {
-                size_t idx = full_schema.GetColumnIndex(col_name);
-                selected_columns.push_back(full_schema.GetColumn(idx));
-                column_indexes.push_back(idx);
+                if (col_name == "*") {
+                    for (size_t i = 0; i < full_schema.GetColumnCount(); i++) {
+                        selected_columns.push_back(full_schema.GetColumn(i));
+                        column_indexes.push_back(i);
+                    }
+                    break;
+                } else {
+                    size_t idx = full_schema.GetColumnIndex(col_name);
+                    selected_columns.push_back(full_schema.GetColumn(idx));
+                    column_indexes.push_back(idx);
+                }
             }
+
 
             storage::Schema select_schema;
             for (auto& select_column : selected_columns) {
@@ -123,14 +132,20 @@ namespace executor {
         std::shared_ptr<catalog::Catalog> catalog_;
 
         std::pair<std::string, storage::Field> ParsePredicate(const std::string &predicate) {
-            std::regex pattern(R"((<=|>=|<|>|=)\s*(\S+))");
+            std::regex pattern(R"(^(\S+)\s*(<=|>=|<|>|=)\s*(\S+)$)");
             std::smatch matches;
             if (std::regex_match(predicate, matches, pattern)) {
-                std::string op = matches[1];
-                std::string value_str = matches[2];
-                if (std::regex_match(value_str, std::regex(R"(\d+\.\d+)"))) return {op, std::stod(value_str)};
-                else if (std::regex_match(value_str, std::regex(R"(\d+)"))) return {op, std::stoi(value_str)};
-                else return {op, value_str};
+                std::string col = matches[1].str();
+                std::string op = matches[2].str();
+                std::string value_str = matches[3].str();
+
+                if (std::regex_match(value_str, std::regex(R"(\d+\.\d+)"))) {
+                    return {op, std::stod(value_str)};
+                } else if (std::regex_match(value_str, std::regex(R"(\d+)"))) {
+                    return {op, std::stoi(value_str)};
+                } else {
+                    return {op, value_str};
+                }
             }
             throw std::invalid_argument("Invalid predicate format: " + predicate);
         }
