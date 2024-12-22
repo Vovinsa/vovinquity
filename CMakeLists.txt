@@ -9,6 +9,7 @@ include_directories(src/storage/table/system)
 include_directories(src/catalog)
 include_directories(src/planner)
 include_directories(src/executor)
+include_directories(src/parser)
 
 add_executable(
         Database
@@ -19,5 +20,6 @@ add_executable(
         src/catalog/catalog.cpp
         src/planner/planner.cpp
         src/executor/executor.cpp
+        src/parser/parser.cpp
         main.cpp
 )
