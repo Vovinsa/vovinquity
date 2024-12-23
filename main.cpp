@@ -78,7 +78,7 @@ int main() {
 
     executor::Executor executor(catalog);
 
-    std::cout << "Welcome to our mini DB (with readline)!\n";
+    std::cout << "Welcome to mini DB vovinquity!\n";
     std::cout << "Type EXIT or QUIT to stop.\n\n";
 
     while (true) {
