@@ -23,3 +23,5 @@ add_executable(
         src/parser/parser.cpp
         main.cpp
 )
+
+target_link_libraries(Database PRIVATE readline ncurses)
