@@ -32,3 +32,14 @@ sql>
 ```
 
 From here, you can enter SQL-like commands. Type `EXIT` or `QUIT` to terminate the application (or press `Ctrl+C`)
+
+## Supported commands
+
+Planner currently recognizes the following plan node types:
+- `CREATE TABLE`
+- `INSERT`
+- `SELECT`
+- `ORDER BY`
+- `GROUP BY`
+- `WHERE`
+- Aggregates: `COUNT`, `AVG`, `SUM` 
