@@ -2,9 +2,13 @@
 
 This is a simple toy database application that accepts SQL queries in an interactive console
 
+---
+
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) installed on your machine.
+
+---
 
 ## How to Build
 
@@ -15,6 +19,8 @@ docker build -t database .
 ```
 
 This will create a Docker image named `database`
+
+---
 
 ## How to Run
 
@@ -33,6 +39,8 @@ sql>
 
 From here, you can enter SQL-like commands. Type `EXIT` or `QUIT` to terminate the application (or press `Ctrl+C`)
 
+---
+
 ## Supported commands
 
 Planner currently recognizes the following plan node types:
@@ -43,3 +51,11 @@ Planner currently recognizes the following plan node types:
 - `GROUP BY`
 - `WHERE`
 - Aggregates: `COUNT`, `AVG`, `SUM` 
+
+---
+
+## Schema
+
+![image](imgs/diagram.png)
+
+
