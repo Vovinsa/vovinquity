@@ -12,7 +12,19 @@ This is a simple toy database application that accepts SQL queries in an interac
 
 ## How to Build
 
-Open a terminal in the project root directory and run:
+1. Clone the repo:
+
+```bash
+git clone https://github.com/Vovinsa/vovinquity.git
+```
+
+2. Navigate into the project directory:
+
+```bash
+cd vovinquity
+```
+
+3. Build the Docker image:
 
 ```bash
 docker build -t database .
