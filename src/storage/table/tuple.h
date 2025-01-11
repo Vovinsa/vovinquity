@@ -43,7 +43,7 @@ namespace storage {
             }
         }
 
-        const Field& GetField(size_t index) const {
+        Field GetField(size_t index) const {
             if (index >= fields_.size()) {
                 throw std::out_of_range("Field index out of range");
             }
@@ -54,7 +54,7 @@ namespace storage {
             return schema_.GetColumnIndex(column_name);
         }
 
-        const Schema& GetSchema() const {
+        Schema GetSchema() const {
             return schema_;
         }
     private:

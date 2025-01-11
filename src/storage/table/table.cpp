@@ -43,7 +43,7 @@ namespace storage {
         return std::get<std::shared_ptr<BPlusIndex<KeyType>>>(it->second.index);
     }
 
-    const Schema &Table::GetSchema() const {
+    Schema Table::GetSchema() const {
         return schema_;
     }
 

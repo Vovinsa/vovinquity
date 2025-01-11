@@ -42,13 +42,13 @@ namespace storage {
 
         [[nodiscard]] size_t GetRowCount() const;
 
-        const Schema& GetSchema() const;
+        Schema GetSchema() const;
 
         void SaveToFile(const std::string& file_name) const;
         void LoadFromFile(const std::string& file_name);
 
     protected:
-        const Schema schema_;
+        Schema schema_;
         std::unordered_map<RID, std::shared_ptr<Tuple>> tuples_;
         RID next_rid_;
         std::unordered_map<std::string, IndexInfo> indexes_;
